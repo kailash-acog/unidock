@@ -359,63 +359,38 @@ def extract_model1(folder_name):
 ##############################################################################################################################
 """ Process PoseBusters Output file """
 
-def process_posebusters(folder_name, input_smiles):
-
-    input_file = os.path.join(folder_name, "pipeline_files/posebusters_output.txt")
-    output_file = os.path.join(folder_name, "pipeline_files/5_posebusters_output.csv")
-
-    open(output_file, 'a').close()
-    with open(input_file, 'r') as infile:
-        lines = infile.readlines()
-
-    pattern = re.compile(r'\(\d+ / 19\)')
-    filtered_lines = [line.strip() for line in lines if pattern.search(line)]
-
-    data_dict = {}
-    for line in filtered_lines:
-        parts = line.split()
-        path = parts[0]
-        passes = f"{parts[-3]} {parts[-2]} {parts[-1]}"
-        if path not in data_dict:
-            data_dict[path] = {'path': path, 'passes': set()}
-        data_dict[path]['passes'].add(passes)
-
-    names = []
-    for path_data in data_dict.values():
-        if all(passes == '(19 / 19)' for passes in path_data['passes']):
-            name_match = re.search(r'([^/]+)_out\.sdf', path_data['path'])
-            if name_match:
-                names.append(name_match.group(1))
-
-    with open(output_file, 'w', newline='') as csvfile:
-        writer = csv.writer(csvfile)
-        writer.writerow(['Name'])
-        writer.writerows([[name] for name in names])
-
-    print(f"\033[1m\033[34mPoseBusters filteration completed and file saved in folder: \033[91m{output_file}\033[0m")
+def process_pb_csv(folder_name):
+    pb_result = os.path.join(folder_name, 'pipeline_files', '5_pb_out.csv')
+    pb = pd.read_csv(pb_result)
+    pb = pb.drop('file', axis=1)
+    pb = pb.drop(pb.index[1::2])
+    pb = pb.rename(columns={'molecule': 'Name'})
+    pb['passes'] = pb.iloc[:, 1:].eq('True').sum(axis=1)
+    pb.to_csv(os.path.join(folder_name, 'pipeline_files', '6_pb_out.csv'), index=False)
 
 
-    df4 = pd.read_csv(os.path.join(folder_name, f'pipeline_files/3_compounds_for_posebusters.csv'))
+def final_output(folder_name, input_smiles, passes):
+    posebusters_path = os.path.join(folder_name, 'pipeline_files', '6_pb_out.csv')
+    df = pd.read_csv(posebusters_path)
+    
+    df1 = df[df['passes'] >= passes]
+
+    affinity_path = os.path.join(folder_name, 'pipeline_files', '2_extract_affinity_from_pdbqt.csv')
+    df2 = pd.read_csv(affinity_path)
+    df2 = df2.sort_values(by='Affinity').reset_index(drop=True)
+
+    df_temp = pd.merge(df1, df2, on='Name', how='left')
+
+    df3 = pd.read_csv(input_smiles)
+
+    df4 = pd.merge(df_temp, df3, on='Name', how='left')
+    df4 = df4[['Name', 'SMILES', 'Affinity']]
     df4 = df4.sort_values(by='Affinity').reset_index(drop=True)
+    output_path = os.path.join(folder_name, 'output.csv')
+    df4.to_csv(output_path, index=False)
 
-    df5 = pd.read_csv(output_file)
-
-    df6 = pd.merge(df4, df5, on='Name', how='inner')[['Name', 'Affinity']]
-    df6 = df6.sort_values(by='Affinity').reset_index(drop=True)
-
-    df7 = pd.read_csv(input_smiles)
-    
-    df8 = pd.merge(df6, df7, on='Name', how='left')
-    df8 = df8[['Name', 'SMILES', 'Affinity']]
-    df8.to_csv(os.path.join(folder_name, 'output.csv'), index=False)
-    
-    filtered_out_count = len(df4) - len(df6)
-    
-    merged_df = pd.merge(df4, df6, how='outer', indicator=True)
-    df9 = merged_df[merged_df['_merge'] != 'both'].drop('_merge', axis=1)
-    df9.to_csv(os.path.join(folder_name, 'pipeline_files/4_final_compounds.csv'), index=False)
-    print(f"\033[1m\033[34mCompounds filtered out by PoseBusters: \033[91m{filtered_out_count}\033[0m")
-
+    filtered_count = len(df) - len(df1)
+    print(f"\033[1m\033[34mCompounds filtered out by PoseBusters: \033[91m{filtered_count}\033[0m")
 
 
 
