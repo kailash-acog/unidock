@@ -1,0 +1,25 @@
+name: unidock
+channels:
+  - nvidia
+  - pytorch
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.8.10
+  - cudatoolkit=11.5 
+  - pytorch
+  - rdkit
+  - openbabel  
+  - numpy
+  - pandas
+  - scipy
+  - psycopg2
+  - pip
+  - pip:
+      - jupyterlab
+      - ipywidgets
+      - ipython-sql
+      - prody
+      - posebusters
+      - meeko
+      - rich
